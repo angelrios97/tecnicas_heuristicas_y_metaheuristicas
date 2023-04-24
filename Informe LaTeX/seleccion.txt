@@ -1,0 +1,5 @@
+def selec_padres(pob):  # Escoge dos padres con probabilidad proporcional al fitness.
+    fit = [fitness(_) for _ in pob]
+    total = sum(fit)
+    prob = [_ / total for _ in fit]  # Lista de probabilidades proporcional al fitness.
+    return choices(pob, prob, k=2)

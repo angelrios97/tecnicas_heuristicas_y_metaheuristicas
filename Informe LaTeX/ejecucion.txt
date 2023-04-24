@@ -1,0 +1,5 @@
+F = lee_cnf("uf20-01.cnf")  # Leemos la fórmula booleana del cnf.
+tiempo0 = datetime.now()
+genetic_sat(F)  # Ejecutamos el algoritmo genético con la búsqueda local.
+tiempo1 = datetime.now()
+print("Tiempo de cálculo: ", tiempo1 - tiempo0)  # Tiempo de cálculo.

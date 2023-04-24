@@ -1,0 +1,4 @@
+def elitista2(pob):  # Toma una población y devuelve los dos individuos con mayor fitness para la selección elitista.
+    pob2 = pob.copy()
+    pob2.sort(key=fitness)  # Ordenamos la población de manera creciente según el fitness.
+    return pob2[-1], pob2[-2]

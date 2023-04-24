@@ -1,0 +1,7 @@
+def mutacion(inter, pmut1, pmut2):  # Mutación del cromosoma inter.
+    hijo = inter
+    if random() <= pmut1:  # Decidimos si mutamos al hijo.
+        for _ in range(len(hijo)):  # Recorremos los genes del hijo.
+            if random() <= pmut2:  # Decidimos si mutamos el gen.
+                hijo[_] ^= True  # Invertimos el valor del gen en la interpretación.
+    return hijo

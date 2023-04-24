@@ -1,0 +1,15 @@
+def ganancia(inter, pos, f):  # Diferencia de fitness antes y después de cambiar la posición en la interpretación.
+    xi = variables(f)
+    clausulas = []
+    for _ in F.args:  # Recorremos las cláusulas de la fórmula y guardamos las que contengan la variable.
+        if xi[pos] in _.atoms():
+            clausulas.append(_)
+    inter2 = inter.copy()
+    inter2[pos] ^= True  # Consideramos la interpretación con el opuesto para la variable.
+    fit0, fit1 = 0, 0
+    for _ in clausulas:  # Recorremos las cláusulas con la variable y calculamos la diferencia de fitness.
+        if _.subs(zip(xi, inter)):
+            fit0 += 1
+        if _.subs(zip(xi, inter2)):
+            fit1 += 1
+    return fit1 - fit0, inter2

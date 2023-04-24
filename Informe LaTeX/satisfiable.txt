@@ -1,0 +1,31 @@
+def genetic_sat(f, n_ind=10, tmax=30000, pmut1=0.9, pmut2=0.5, busqueda=True):
+    n_var = len(F.atoms())
+    P = [choices([True, False], k=n_var) for _ in range(n_ind)]  # Generamos la población inicial.
+    if busqueda:
+        P = [flip_heuristic(_) for _ in P]  # Aplicamos la búsqueda local a cada individuo de la población.
+    t = 0
+    while t < tmax and not satisface(P, f)[
+        0]:  # Si no hemos llegado al número máximo de generaciones y la población no satisface la fórmula.
+        t += 1
+        print("Generación: ", t)
+        P0 = P  # Reasignamos la población actual.
+        P = []
+        P.extend(elitista2(P0))  # Adición elitista de los dos mejores individuos de la población anterior.
+        while len(P) < len(P0):
+            padre1, padre2 = selec_padres(P0)  # Selección por ruleta de los padres.
+            hijo = cruce_uniforme(padre1, padre2)  # Cruce uniforme de los padres.
+            hijo = mutacion(hijo, pmut1, pmut2)  # Mutación del hijo.
+            if busqueda:
+                hijo = flip_heuristic(hijo, f)
+            P.append(hijo)  # Añadimos el hijo a la población.
+            print("Hijo", len(P))
+            if satisface([hijo], f)[0]:
+                print("La fórmula booleana introducida es satisfecha por la interpretación:\n", hijo)
+                return True, hijo, t
+    sat = satisface(P, f)
+    if sat[0]:
+        print("La fórmula booleana introducida es satisfecha por la interpretación:\n", sat[1])
+        return True, sat[1], t
+    else:
+        print("Se ha alcanzado el número máximo de generaciones.")
+        return False, elitista2(P)[-1]

@@ -1,0 +1,15 @@
+def flip_heuristic(inter, f):  # Búsqueda local que maximiza el fitness por intercambio de variables.
+    list_var = list(f.atoms())
+    n_var = len(list_var)
+    index_var = list(range(n_var))
+    shuffle(index_var)  # Mezclamos los índices de las variables en orden aleatorio.
+    mejora = 1
+    interr = inter.copy()
+    while mejora > 0:  # Mientras sigamos mejorando
+        mejora = 0
+        for i in range(n_var - 1):  # Para cada variable en orden aleatorio.
+            gain, inter2 = ganancia(interr, index_var[i], f)  # calculamos la ganancia al invertirla.
+            if gain >= 0:  # Si la ganancia es positiva,
+                interr = inter2  # aceptamos la inversión
+                mejora += gain  # Hemos mejorado el fitness de la interpretación.
+    return interr

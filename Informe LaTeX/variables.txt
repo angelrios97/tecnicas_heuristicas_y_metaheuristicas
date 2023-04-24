@@ -1,0 +1,2 @@
+def variables(f):  # Devuelve las variables de la fórmula.
+    return var("x1:" + str(len(f.atoms()) + 1))

@@ -1,0 +1,9 @@
+def cruce_uniforme(padre1, padre2):  # Devolvemos un hijo fruto de un cruce uniforme de los padres.
+    mascara = [choices([True, False], k=len(padre1))]  # Generamos uniformemente una máscara de cruce.
+    hijo = [False] * len(padre1)  # Inicializamos un hijo de ceros.
+    for _ in range(len(mascara)):  # Recorremos la máscara.
+        if mascara[_]:  # Si el elemento es 1,
+            hijo[_] = padre1[_]  # el gen del hijo es el del padre1.
+        else:  # Si el elemento es 0,
+            hijo[_] = padre2[_]  # el gen del hijo es el del padre2.
+    return hijo

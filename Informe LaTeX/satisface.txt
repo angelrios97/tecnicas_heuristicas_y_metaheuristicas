@@ -1,0 +1,6 @@
+def satisface(pob, f):  # Comprueba si algún individuo de la población satisface la fórmula.
+    xi = variables(f)
+    for _ in pob:  # Recorremos la población.
+        if F.subs(zip(xi, _)):  # Evaluamos la fórmula y, si se satisface, retornamos True y la interpretación.
+            return True, _
+    return False, None

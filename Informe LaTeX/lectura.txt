@@ -1,0 +1,28 @@
+# Función que lee una fórmula bien formada del cálculo proposicional en forma normal
+# conjuntiva de 3-cláusulas y la guarda como una fórmula del paquete sympy.
+def lee_cnf(nom_archivo):
+    fichero = open(nom_archivo, "r")  # Abrimos el fichero.
+    linea = ""
+    while not match("p", linea):  # Buscamos la línea de parámetros.
+        linea = fichero.readline()
+    linea = linea.split()  # La línea de parámetros.
+    n_var = int(linea[2])  # Número de variables.
+    n_cla = int(linea[3])  # Número de cláusulas.
+    lineas = []
+    linea = fichero.readline()  # Primera cláusula.
+    while not match("%", linea):  # Guardamos cada línea hasta %.
+        lineas.append(linea.split())
+        linea = fichero.readline()
+    fichero.close()  # Cerramos el fichero.
+    lineas = [[int(_) for _ in lin][:-1] for lin in lineas]  # Quitamos los ceros.
+    var("x1:" + str(n_var))  # Generamos las variables simbólicas.
+    form = [[0] * 3 for _ in range(n_cla)]  # Inicializamos las cláusulas.
+    for i in range(len(lineas)):  # Cambiamos de números a variables.
+        for j in range(3):
+            if lineas[i][j] > 0:
+                form[i][j] = symbols("x" + str(lineas[i][j]))
+            else:
+                form[i][j] = ~symbols("x" + str(abs(lineas[i][j])))
+    form = [_[0] | _[1] | _[2] for _ in form]  # Disyunciones
+    FORM = And(*form)  # Fórmula en forma normal conjuntiva de 3-cláusulas.
+    return FORM

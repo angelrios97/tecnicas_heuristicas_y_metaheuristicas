@@ -1,0 +1,359 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[left=3.5cm,right=3.5cm,top=2.8cm,bottom=2.8cm]{geometry}
+\usepackage{amsmath, amssymb, amsthm, amsfonts, mathtools, mathrsfs}
+\usepackage{tikz, tikz-cd, enumitem, xcolor, hyperref, float, fontenc}
+\usepackage[spanish, algoruled, onelanguage, vlined]{algorithm2e}
+\usepackage{listings}
+\lstset{
+    basicstyle = \scriptsize,
+    inputencoding = utf8,
+    extendedchars = true,
+    literate =
+    {á}{{\'a}}1  {é}{{\'e}}1  {í}{{\'i}}1 {ó}{{\'o}}1  {ú}{{\'u}}1 {ñ}{{\~n}}1
+}
+\usepackage{minted}
+\usepackage{ifthen}
+\theoremstyle{definition}
+\newtheorem*{probSAT}{Problema \textbf{SAT}}
+\newtheorem*{probtSAT}{Problema $3-$\textbf{SAT}}
+\newtheorem*{theoCook}{Teorema de Cook}
+\title{\Huge \textbf{Técnicas Heurísticas y Metaheurísticas}\\\vspace{5pt} \Large \textbf{Búsqueda local genética para $3-$SAT}}
+\author{Ángel Ríos San Nicolás}
+\date{15 de junio de 2021}
+\renewcommand{\refname}{Bibliografía}
+\newcommand{\sat}{\textbf{SAT}}
+\newcommand{\tsat}{$3-$\textbf{SAT}}
+\newcommand{\NPc}{\textbf{NP}-\text{completo}}
+\newcommand{\NP}{\textbf{NP}}
+\newcommand{\PP}{\textbf{P}}
+\newcommand{\PhiXn}{\Phi(X_1,\ldots,X_n)}
+\newcommand{\eps}{(\epsilon_1,\ldots,\epsilon_n)}
+\newcommand{\epss}{\epsilon_1,\ldots, \epsilon_n}
+\newcommand{\nind}{n_{\text{ind}}}
+\newcommand{\cmtt}[1]{{\fontfamily{cmtt}\selectfont #1}}
+\newcommand{\code}[1]{\lstinputlisting[language=Python, breaklines = true, breakatwhitespace = true]{#1}}
+\begin{document}
+
+\SetAlgoProcName{Método}{metodo}
+\SetKwBlock{Begin}{Pasos:}{pasos}
+\DontPrintSemicolon
+
+\maketitle
+\section*{Introducción}
+En 1971 Stephen Coook demostró en su articulo \textit{The Complexity of Theorem Proving Procedures} que el problema $\sat$ de satisfactibilidad booleana pertenece a la clase complejidad $\NPc$, es decir, que cualquier problema de la clase $\NP$, de los problemas de decisión verificables en tiempo polinomial, se puede reducir en tiempo polinomial a $\sat$. Éste fue el primer problema demostrado con esta propiedad y supuso un avance en la comprensión de la complejidad computacional porque permitió clasificar fácilmente otros problemas de decisión en la clase $\NP$. S. Cook también demostró que se sigue teniendo $\NP-$completitud en el problema de satisfactibilidad booleana cuando se restringen las fórmulas a conjunciones de disyunciones de tres variables o sus negaciones, lo que se conoce como el problema $\tsat$, que es en el que nos centraremos en este trabajo.
+
+Como no conocemos la respuesta a la conjetura ¿$\PP = \NP$?, no sabemos si existen algoritmos que decidan los problemas $\NP$, y en particular $\tsat$, en tiempo polinomial. Para resolver estos problemas en tiempo razonable desarrollamos técnicas heurísticas y metaheurísticas que pretenden resolver eficazmente o con menos recursos una gran parte de sus instancias. Vamos a describir una estrategia genética para resolver $\tsat$ que utiliza una búsqueda local para maximizar el número disyunciones que se satisfacen en la fórmula en cada generación del algoritmo.
+
+Durante todo el trabajo nos basamos principalmente en \cite{MarRoss}. En la \hyperref[sec1]{Sección 1} recordamos el lenguaje del cálculo proposicional y enunciamos el problema $\tsat$. En la \hyperref[sec2]{Sección 2} describimos teóricamente el algoritmo de búsqueda local genética que utilizaremos. En la \hyperref[sec3]{Sección 3} detallamos la implementación del algoritmo en Python. En la \hyperref[sec4]{Sección 4} explicamos los resultados obtenidos y concluimos el trabajo.
+
+\section{El problema de satisfactibilidad booleana}\label{sec1}
+
+
+La sintaxis del \textbf{cálculo proposicional} consiste en el alfabeto de
+\begin{itemize}
+    \item Variables: $\{X_1,X_2,\ldots\}$.
+    \item Conectores lógicos: $\{\neg, \lor\}$.
+    \item Paréntesis: $\{(,)\}$. 
+\end{itemize}
+El lenguaje de las \textbf{fórmulas bien formadas} es el generado por la siguiente gramática.
+\begin{enumerate}
+    \item Las variables son fórmulas bien formadas.
+    \item Si $A$ es una fórmula bien formada, entonces $\neg(A)$ es una fórmula bien formada.
+    \item Si $A$ y $B$ son fórmulas bien formadas, entonces $(A)\lor(B)$ son fórmulas bien formadas.
+\end{enumerate}
+A las fórmulas bien formadas del cálculo proposicional las denominaremos \textbf{fórmulas booleanas}. Denotaremos por $\PhiXn$ a una fórmula booleana en la que puedan aparecer solo las variables $X_1,\ldots,X_n$. Como abuso de notación, omitiremos los paréntesis de la manera habitual y definimos $A\land B : = \neg A\lor \neg B$,  $A\rightarrow B : = \neg A \lor B$ y $A\leftrightarrow B := (A\rightarrow B)\land (B\rightarrow A)$.
+
+Una \textbf{interpretación} de una fórmula booleana $\PhiXn$ es una tupla $\eps\in\{0,1\}^n$. Definimos de manera recursiva la \textbf{evaluación} de una fórmula booleana en una interpretación, que lo denotamos por $\Phi(\epss)$.
+\begin{enumerate}
+    \item Si $\Phi(X_i)=X_i$ con $i\in\mathbb{N}$, entonces $\Phi(0) = 0$ y $\Phi(1)=1$.
+    \item Si $\Phi(\epss)=0$, entonces $(\neg \Phi)(\epss)=1$.\\ Si $\Phi(\epss)=1$, entonces $(\neg\Phi)(\epss)=0$.
+    \item Si $\Phi(\epss)=1$ o $\Psi(\epss)=1$, entonces $(\Phi\lor\Psi)(\epss)=1$, y en otro caso, si $\Phi(\epss)=0$ y $\Psi(\epss)=0$, entonces $(\Phi\lor\Psi)(\epss)=0$.
+\end{enumerate}
+Una fórmula booleana $\PhiXn$ es \textbf{satisfecha} por una interpretación $\eps$ si la evaluación de la fórmula en la interpretación es $\Phi(\epss)=1$ y es \textbf{satisfactible} si es satisfecha por alguna interpretación.
+\begin{probSAT} Dada una fórmula booleana, decidir si es satisfactible.
+\
+\end{probSAT}
+Para poder enunciar el problema $\tsat$, debemos introducir los conceptos de cláusula y forma normal conjuntiva.
+
+Una \textbf{cláusula} es una fórmula booleana de la forma $\PhiXn=X_{i_1}\lor X_{i_2}\lor\cdots\lor X_{i_r}$. Se dice que una cláusula con $n$ variables es una $k-$\textbf{cláusula} si contiene exactamente $k$ de sus variables. Una fórmula está en \textbf{forma normal conjuntiva} si es de la forma
+\[\PhiXn = C_1(X_1,\ldots,X_n)\land\cdots\land C_m(X_1,\ldots,X_n),\]
+donde $C_i(X_1,\ldots,X_n)$ es una cláusula para cada $i=1,\ldots,m$.
+
+\begin{probtSAT} Dada una fórmula booleana en forma normal conjuntiva de $3-$cláusulas, decidir si es satisfactible.
+\end{probtSAT}
+\section{Algoritmo genético con búsqueda local}\label{sec2}
+Describimos de forma teórica y en pseudocódigo el algoritmo que implementaremos.
+\subsection{Componentes del algoritmo genético}
+\begin{description}
+    \item[Entrada.] El algoritmo toma como entrada una fórmula bien formada del cálculo proposicional en forma normal conjuntiva de $3-$cláusulas
+    \[\PhiXn=C_1(X_1,\ldots, C_n)\land\cdots\land C_m(X_1,\ldots,X_n).\]
+
+    \item[Cromosomas.] Los \textbf{cromosomas} son las posibles interpretaciones $(\epss)\in\{0,1\}^n$ y definen el espacio de búsqueda. Denominamos \textbf{gen} a cada una de las componentes $e_i$ de un cromosoma y \textbf{alelos} a sus posibles valores en $\{0,1\}$. El objetivo es encontrar una interpretación que satisfaga la fórmula.
+    
+    \item[Función fitness.] Definimos la función $f:\{0,1\}^n\longrightarrow\{0,\ldots,m\}$ que a cada cromosoma le asocia el número de clausulas de la fórmula satisfechas por la interpretación parcial dada por el cromosoma.
+    
+    \begin{procedure}[tbh]
+    \DontPrintSemicolon
+        \caption{Fitness($\epsilon$)}
+        \KwIn{Un cromosoma $\epsilon$.}
+        \KwOut{El fitness de $\epsilon$, el número $f(\epsilon)$ de cláusulas satisfechas por la interpretación definida por el cromosoma.}
+        \Begin{
+            \If{$\epsilon=()$}{\Devolver{$0$}}
+            fitness $=0$\;
+            \ForEach{$C$ cláusula de $\PhiXn$}{
+                \If{$C(\epsilon)=1$}{fitness = fitness +1}
+            }
+            \Return{\textup{fitness}}
+        }
+    \end{procedure}
+    
+    \item[Población inicial.] Tomamos una muestra aleatoria de $k$ interpretaciones $\{\epsilon_1,\ldots,\epsilon_k\}\subseteq\{0,1\}^n$ como \textbf{población inicial} de la que se obtendrán las sucesivas generaciones.
+
+    
+    \item[Selección.] El proceso de \textbf{selección} de los padres se hace mediante ruleta proporcional al fitness. Dada una población $P$ y un cromosoma $\epsilon_0\in P$, la probabilidad de escogerlo como padre es el cociente
+    \[\frac{f(\epsilon_0)}{\sum\limits_{\epsilon\in P}f(\epsilon)}.\]
+    Además, a partir de la primera generación incluimos de manera elitista los dos cromosomas de mayor fitness de la generación anterior.
+    \begin{procedure}
+    \caption{Selección($P$)}
+    \KwIn{Una población $P$ de cromosomas.}
+    \KwOut{Dos cromosomas $(\epsilon_1^0,\ldots,\epsilon_n^0), (\epsilon_1^1,\ldots,\epsilon_n^1)\in P$ escogidos con probabilidad proporcional al fitness.}
+    \Begin{
+        fitnessP $=\left[\textbf{$\operatorname{Fitness}(\epsilon)$ para cada $\epsilon$}\textit{ en $P$}\right]$\;
+        fitness\_total $=\sum\limits_{\epsilon\in P}\operatorname{Fitness}(\epsilon)=\operatorname{suma}\left(\text{fitnessP} \right)$\;
+        prob $= \left[\operatorname{Fitness}(\epsilon)/\operatorname{fitness\_total}\textbf{ para cada }\epsilon\textit{ en }P\right]$\;
+        \Return{Muestra aleatoria de $P$ según la distribución de probabilidad determinada por \textup{prob}.}
+        }
+    \end{procedure}
+    
+    \begin{procedure}
+    \caption{Elitismo($P$)}
+    \KwIn{Una población $P=(\epsilon_1,\ldots,\epsilon_k)$ de cromosomas}
+    \KwOut{Dos cromosomas con mayor fitness en $P$.}
+    \Begin{
+        $P' = P$\;
+        Ordenamos $P'$ en orden ascendente según el fitness.\;
+        \Return{El último y el penúltimo elemento de $P$.}
+    }
+    \end{procedure}
+    
+    \item[Operadores genéticos.] Dados dos padres, generamos un único \textbf{hijo} mediante cruce y mutación.
+    \begin{description}[after = \strut]
+        \item[Cruce.] La operación de \textbf{cruce} es uniforme mediante una máscara de cruce. Dados dos padres $(\epsilon_1^0,\ldots,\epsilon_n^0),(\epsilon_1^1,\ldots,\epsilon_n^1)$, tomamos de manera aleatoria con distribución uniforme un elemento $(m_1,\ldots,m_n)\in\{0,1\}^n$ que denominaremos \textbf{máscara de cruce}. El hijo $(x_1,\ldots,x_n)\in\{0,1\}^n$ está dado por
+        \[x_i = \left\{\begin{array}{cl}\epsilon_i^0 & \text{si $m_i=0$,}\\ \epsilon_i^1 & \text{si $m_i=1$},\end{array}\right.\]
+        es decir, el alelo de un gen es del primer padre o del segundo si la correspondiente componente en la máscara de cruce es $0$ o $1$ respectivamente.
+        \begin{procedure}[ht]
+        \caption{CruceUniforme($\epsilon^0$, $\epsilon^1$)}  
+        \KwIn{Dos cromosomas padre $\epsilon^0=(\epsilon_1^0,\ldots,\epsilon_n^0),\epsilon^1=(\epsilon_1^1,\ldots,\epsilon_n^1)$ seleccionados de una población.}
+        \KwOut{Un cromosoma hijo $(x_1,\ldots,x_n)$ fruto del cruce de los padres.}
+        \Begin{
+            mascara $= [\operatorname{sample}(0,1)\textbf{ para cada }\epsilon\textit{ en }P]$ \tcp{sample(0,1) es 0 o 1 con probabilidad 1/2}
+            hijo $=(0\ldots,0)$ \tcp{(k) ceros}
+            \For{$i=1,\ldots,k$}{
+                \If{\textup{mascara[$i$]} == 1}{hijo$[i]=e^0_i$}
+                \Else{
+                    hijo$[i]=e^1_i$
+                    }
+            }\Return{\textup{hijo}}
+            }
+            
+        \end{procedure}
+        \item[Mutación.] A cada hijo $(x_1,\ldots,x_n)\in\{0,1\}^n$ fruto de un cruce le aplicamos, con probabilidad $p_{m_1}$, la \textbf{mutación} correspondiente a recorrer cada uno de sus genes e invertir su alelo con probabilidad $p_{m_2}$.
+        \begin{procedure}[ht]
+        \caption{Mutación($x,p_{m_1},p_{m_2}$)}
+        \KwIn{Un cromosoma $x=(x_1,\ldots,x_n)$ y las probabilidades de mutación $p_{m_1}$ y $p_{m_2}$.}
+        \KwOut{Un cromosoma $x'=(x_1',\ldots,x_n')$ mutado.}
+        \Begin{
+            \If{\textup{random()}$\leq1-p_{m_1}$\tcp{random() es un número aleatorio uniforme en (0,1)}}{
+                \For{$i=1,\ldots,k$
+                }{
+                    \If{\textup{random()}$\leq 1 - p_{m_2}$}{
+                        $x[i] = x[i] + 1 \mod 2$
+                    }
+                }
+            }
+            \Return{x}
+        }
+        \end{procedure}
+        
+    \end{description}
+\end{description}
+\subsection{Búsqueda local}
+Observamos que la selección de los padres y el elitismo tienen en cuenta la función fitness, pero no así los cruces y las mutaciones. Para mejorar el funcionamiento del algoritmo, podemos implementar una búsqueda local heurística que transforme los hijos generados en soluciones parcialmente óptimas para inversiones de un gen, es decir, que no exista otra interpretación que difiera en una única componente y satisfaga más cláusulas. 
+
+Primero necesitamos un método que calcule la ganancia de un intercambio definida como la diferencia del número de cláusulas satisfechas después del cambio y el número de cláusulas satisfechas antes.
+
+\begin{procedure}[ht]
+\caption{Ganancia($\epsilon,i$)}
+\KwIn{Un cromosoma $\epsilon$ y un índice $i\in\{1,\ldots,n\}$.}
+\KwOut{El cromosoma $\delta$ resultado de invertir la componente $i$-ésima y la ganancia del cambio, es decir, $f(\delta)-f(\epsilon)$.}
+\Begin{
+    clausulas $= []$\;
+    \ForEach{$C$ cláusula de $\PhiXn$}{
+        \If{$X_i$ aparece en $C$}{
+            \textit{Añadir $C$ a} clausulas.
+        }
+    }
+    $\delta = \epsilon$\;
+    $\delta[i] = \delta[i] + 1 \mod 2$\;
+    $\textup{fit}_0 = 0$\;
+    $\textup{fit}_1 = 0$\;
+    \ForEach{$C$ en \textup{clausula}}{
+        \If{$C(\epsilon)=1$}{
+            $\textup{fit}_0 = \textup{fit}_0 + 1$ 
+        }
+        \If{$C(\delta)=1$}{
+            $\textup{fit}_1 = \textup{fit}_1 + 1$
+        }
+    }
+    \Devolver{$(\textup{fit}_1-\textup{fit}_0, \delta)$}
+}
+
+\end{procedure}
+
+El algoritmo de búsqueda local toma como entrada un cromosoma, es decir, una interpretación de la fórmula y hace lo siguiente: Recorre los índices de las variables en orden aleatorio y calcula la ganancia del cambio de la variable correspondiente. Si la ganancia es positiva, entonces se acepta el cambio. Este proceso se repite mientras mejoremos, es decir, hasta que todas las ganancias en una ejecución del bucle sean negativas. La razón de seguir un orden aleatorio en las variables es que, de lo contrario, la búsqueda local se especializaría en satisfacer más cláusulas solo con las primeras variables, lo que es un sesgo inadecuado.
+
+\begin{procedure}
+\caption{FlipHeuristic($\epsilon$)}
+\KwIn{Un cromosoma $\epsilon$.}
+\KwOut{Un cromosoma $\epsilon'$ que maximiza el fitness para inversiones de una única variable.}
+\Begin{
+    index\_var $=\operatorname{permutation}(1,\ldots,n)$\;
+    mejora $= 1$\;
+    \While{\textup{mejora $> 0$}}{
+        mejora = 0\;
+        \For{$i=1,\ldots,n-1$}{
+            ($\epsilon'$, ganancia) $=$ Ganancia($\epsilon$, \textup{index\_var}[$i$])\;
+            
+            \If{\textup{ganancia $\geq 0$}}{
+                    $\epsilon = \epsilon'$\;
+                    mejora = mejora + ganancia\;
+            }
+        }
+    }
+    \Return{$\epsilon$}
+}
+\end{procedure}
+
+\subsection{Algoritmo genético con búsqueda local}
+Describimos a continuación el pseudocódigo del algoritmo genético que implementa la búsqueda local.
+
+\begin{procedure}
+\caption{GeneticAlgorithm($k, t_{\max}, p_{m_1}, p_{m_2}, \text{busq}$)}
+\KwIn{El número $k$ de individuos de la población, el número máximo de generaciones $t_{\max}$, las probabilidades de mutación $p_{m_1}$ y $p_{m_2}$ y un valor booleano busq que indica si se aplica o no la búsqueda local.}
+\KwOut{Si el algoritmo encuentra una interpretación $\epsilon_S$ que satisface $\Phi$, entonces se devuelve \textbf{True}, $\epsilon_S$ y el número de generaciones necesarias; en caso contrario, se devuelve \textbf{False} y un individuo con el mayor fitness de la población.}
+\Begin{
+$P$ = [sample(0,1,$n$) \textbf{para cada} $i=1,
+\ldots,k$]\;
+\If{\textup{busq = True}}{
+    $P$ = [FlipHeuristic($\epsilon$) \textbf{ para cada } $\epsilon\in P$]
+    }
+$t = 0$\;
+\While{$t<t_{\max}\text{ y } \forall\epsilon\in P,\Phi(\epsilon)=0$}{
+    $t = t+1$\;
+    $P_0=P$\;
+    $P = []$\;
+    $P = P \cup \text{Elitismo}(P_0)$\;
+    \While{$|P|<|P_0|$}{
+        $\text{padre}_1, \text{padre}_2 = \text{Selección}(P)$\;
+        $\text{hijo} = \text{CruceUniforme}(\text{padre}_1, \text{padre}_2)$\;
+        $\text{hijo}=\text{Mutación}(\text{hijo},p_{m_1},p_{m_2})$\;
+        \If{\textup{busq = True}}{
+            $\text{hijo}=\text{FlipHeuristic}(\text{hijo})$\;
+            }
+        \If{$\Phi(\textup{hijo})=1$}{
+            \Return{\textbf{\textup{True}}, $\textup{hijo}$, $t$}
+            }
+        }
+    }
+    \If{$\exists \epsilon_S\in P : \Phi(\epsilon_S)=1$}{
+        \Return{\textbf{\textup{True}}, $\epsilon_S$, $t$}
+        }\Else{
+        \Return{\textbf{\textup{False}}, $\textup{Elitismo}(P)[2]$}
+        }
+}
+\end{procedure}
+
+\section{Implementación}\label{sec3}
+Para la implementación utilizamos el paquete \cmtt{sympy} de Python que permite definir fórmulas booleanas y evaluarlas. Como debemos manejar fórmulas que contienen un gran número de variables y cláusulas, no podemos pretender introducirlas a mano. Vamos a trabajar con el formato \cmtt{cnf}, que es un tipo de fichero de texto. Como ejemplo, vemos la estructura de un fichero que codifica la fórmula 
+\[(X_1\lor X_3)\land(X_2\lor\neg X_3\lor X_1)\]
+que es, generalmente, de la forma
+\begin{center}{\fontfamily{cmtt}\selectfont
+\begin{tabular}{l}
+c\\
+c comentarios\\
+c\\
+p cnf 3 2\\
+1 -3 0\\
+2 3 -1 0\\
+\%
+\end{tabular}}\end{center}
+Observamos que tiene un primer bloque de líneas de comentario que empiezan por el carácter \cmtt{c}. Después, tenemos una línea que comienza por \cmtt{p cnf} seguido de dos números que indican el número de variables y el número de cláusulas respectivamente. Cada una del resto de líneas hasta el símbolo opcional \cmtt{\%} codifica una de las cláusulas y siempre terminan en $0$. El formato es claro, los números enteros que aparecen indican el índice de la variable correspondiente y el signo indica si está o no negada en la fórmula.
+
+Importamos los paquetes necesarios para la ejecución del algoritmo.
+\code{paquetes.txt}
+Implementamos la siguiente función en Python para leer fórmulas en formato \cmtt{cnf}, que requiere que la codificación termine en $\%$.
+\begin{description}
+    \item[Lectura]\leavevmode
+        \code{lectura.txt}
+\end{description}
+
+Una vez que tenemos la entrada, podemos programar los diferentes métodos del algoritmo genético.
+
+\begin{description}
+    \item[Variables]\leavevmode
+        \code{variables.txt}
+    \newpage
+    \item[Satisfacción]\leavevmode
+        \code{satisface.txt}
+    \item[Fitness]\leavevmode
+        \code{fitness.txt}
+    \item[Ganancia]\leavevmode
+        \code{ganancia.txt}
+    \item[Búsqueda local]\leavevmode
+        \code{busquedalocal.txt}
+    \item[Elitismo]\leavevmode
+        \code{elitista2.txt}
+    \item[Selección]\leavevmode
+        \code{seleccion.txt}
+    \item[Cruce uniforme]\leavevmode
+        \code{cruce_uniforme.txt}
+    \item[Mutación]\leavevmode
+        \code{mutacion.txt}
+    \item[Algoritmo genético]\leavevmode
+        \code{satisfiable.txt}
+    \newpage
+    \item[Ejecución]\leavevmode
+        \code{ejecucion.txt}
+\end{description}
+
+Hemos probado los métodos con las siguientes instancias de $\tsat$ satisfactibles obtenidas del repositorio de fórmulas booleanas \href{https://www.cs.ubc.ca/~hoos/SATLIB/benchm.html}{SATLIB}\footnote{\href{https://www.cs.ubc.ca/hoos/SATLIB/benchm.html}{SATLIB}: \href{https://www.cs.ubc.ca/~hoos/SATLIB/benchm.html}{https://www.cs.ubc.ca/\%7Ehoos/SATLIB/benchm.html}}:
+\begin{enumerate}
+    \item Familia \cmtt{UF} de instancias satisfactibles uniformes en la transición de fase ($m/n \simeq 4.26$).
+    \begin{description}
+        \item[\cmtt{uf20}] Cuatro instancias con $20$ variables y $91$ cláusulas.
+        \item[\cmtt{uf50}] Cuatro instancias con $50$ variables y $218$ cláusulas.
+        \item[\cmtt{uf75}] Cuatro instancias con $75$ variables y $325$ cláusulas.
+        \item[\cmtt{uf100}] Cuatro instancias con $100$ variables y $430$ cláusulas
+    \end{description}
+    \item Dos fórmulas booleanas de la familia \cmtt{AIM} de instancias satisfactibles con $50$ variables, $80$ cláusulas y solución única.
+\end{enumerate}
+
+Como el algoritmo es una metaheurística con un gran número de parámetros, hemos escogido los valores de los mismos según \cite{MarRoss}. Por lo tanto, fijamos que el número de individuos en una población es $k=10$, el número máximo de generaciones $t_{\max} = 30000$, la probabilidad de mutar un cromosoma hijo $p_{m_1}=0.9$ y la probabilidad de mutar un gen $p_{m_2}=0.5$.
+\section{Resultados y conclusión}\label{sec4}
+
+Para una fórmula booleana de \cmtt{uf20}, el algoritmo encuentra una interpretación que la satisface en unos $7$ segundos aplicando exclusivamente la búsqueda local sobre la población inicial sin necesidad de los operadores genéticos. En el caso de \cmtt{uf50}, la mayoría de ejecuciones termina en $1$ minuto y medio solo con la búsqueda local o en unos $5$ minutos calculando $2$ generaciones. Sin embargo, en algunos casos el proceso requiere $25$ minutos y $5$ generaciones. Para las instancias de \cmtt{uf75} el resultado es similar, en algunas ejecuciones conseguimos encontrar una interpretación satisfactoria en unos $4$ minutos sin necesidad de entrar en la parte genética del algoritmo, pero otras requieren entorno a $12$ minutos y $2$ generaciones o, como era de esperar, más de $25$ minutos, superando el tiempo del caso anterior. Respecto a \cmtt{uf100}, hemos conseguido encontrar una interpretación satisfactoria en unos $25$ minutos con $2$ generaciones, pero la mayoría de las veces el proceso continúa más allá de la hora sin encontrar ninguna interpretación válida.
+
+Para las fórmulas booleanas de la familia \cmtt{AIM}, el algoritmo avanza más rápidamente que en \cmtt{uf50} porque tenemos el mismo número de variables pero muchas menos cláusulas. Sin embargo, el proceso sobrepasa la hora de ejecución y se obtienen decenas de generaciones sin encontrar la única interpretación que satisface la fórmula. Una posible explicación es la unicidad de la interpretación, lo que la hace difícil de encontrar, o también que el algoritmo genético funcione peor cuando el ratio del número de cláusulas entre el número de variables es menor. En cualquier caso, la lentitud general del algoritmo se podría mejorar con una programación más eficiente.
+
+Tenemos que destacar la importancia de la búsqueda local. Cuando intentamos buscar una solución para \cmtt{uf20} sin utilizar la búsqueda local, se obtienen centenares de generaciones requiriendo más de una hora de proceso sin encontrar ninguna interpretación satisfactoria, lo que contrasta con los $7$ segundos en los que la búsqueda local resuelve estas instancias. Como sabemos, para fórmulas más complicadas se requieren algunas generaciones hasta llegar a una interpretación válida, con lo que la combinación del algoritmo genético con la búsqueda local es crucial.
+
+\newpage
+\begin{thebibliography}{}
+\bibitem{Cook} S. Cook, \textit{The complexity of Theorem Proving Procedures}, 1971.
+\bibitem{MarRoss} E. Marchiori, C. Rossi, \textit{A Flipping Genetic Algorithm for Solving Hard 3-SAT Problems}, 2000.
+\bibitem{Sys} G. Syswerda, \textit{Uniform Crossover in Genetic Algorithms}. In J. Shaffer (ed.), Third International Conference on Genetic Algorithms, Morgan Kaufmann, 1989, 2-9.
+
+\bibitem{DIMACS} DIMACS (Center for Discrete Mathematics And Theoretical Computer Science), \textit{Satisfiability Suggested Format}. 1993.
+\end{thebibliography}
+\end{document}

@@ -1,0 +1,9 @@
+def fitness(inter, f):  # Número de cláusulas satisfechas por la interpretación.
+    xi = variables(f)
+    if not inter:  # Si es la interpretación vacía, es 0.
+        return 0
+    fit = 0
+    for _ in f.args:  # Recorremos las cláusulas
+        if _.subs(zip(xi, inter)):  # Si se satisface,
+            fit += 1  # sumamos 1.
+    return fit
